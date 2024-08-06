@@ -105,12 +105,39 @@ Returns t if the file is unprotected, nil if it's password protected."
   (= 0 (call-process "ssh-keygen" nil nil nil
                      "-y" "-P" "" "-f" identity-path)))
 
+(defun agenix--prompt-password (identity-file)
+  "Prompt for the password of IDENTITY-FILE."
+  (read-passwd (format "Password for %s: " identity-file)))
+
+(defun agenix--create-temp-identity (identity-path password)
+  "Create a temporary copy of IDENTITY-PATH and remove its password protection.
+PASSWORD is the current password of the identity file."
+  (let* ((temp-file (make-temp-file "agenix-temp-identity"))
+         (copy-cmd (format "cp %s %s" identity-path temp-file))
+         (rekey-cmd (format "ssh-keygen -p -P \"%s\" -N \"\" -f %s" password temp-file)))
+    (shell-command copy-cmd)
+    (shell-command rekey-cmd)
+    temp-file))
+
 (defun agenix--process-exit-code-and-output (program &rest args)
   "Run PROGRAM with ARGS and return the exit code and output in a list."
-  (let ((identity-path (agenix--extract-identity-path args)))
-    (agenix--with-temp-buffer
-     (lambda (buf) (list (apply #'call-process program nil buf nil args)
-                         (agenix--buffer-string* buf))))))
+  (let* ((identity-path (agenix--extract-identity-path args))
+         (temp-identity-path nil))
+    (when identity-path
+      (unless (agenix--identity-unprotected-p identity-path)
+        (let ((password (agenix--prompt-password identity-path)))
+          (setq temp-identity-path (agenix--create-temp-identity identity-path password))
+          (setq args (mapcar (lambda (arg)
+                               (if (string= arg identity-path)
+                                   temp-identity-path
+                                 arg))
+                             args)))))
+    (unwind-protect
+        (agenix--with-temp-buffer
+         (lambda (buf) (list (apply #'call-process program nil buf nil args)
+                             (agenix--buffer-string* buf))))
+      (when temp-identity-path
+        (delete-file temp-identity-path)))))
 
 ;;;###autoload
 (defun agenix-decrypt-buffer (&optional encrypted-buffer)

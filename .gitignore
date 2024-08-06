@@ -11,3 +11,4 @@
 
 # Packaging
 /.eldev
+.aider*

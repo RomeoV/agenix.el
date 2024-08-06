@@ -101,7 +101,8 @@ Check if the file exists and is readable."
 
 (defun agenix--identity-unprotected-p (identity-path)
   "Check if the identity file at IDENTITY-PATH is password protected.
-Returns t if the file is unprotected, nil if it's password protected."
+Returns t if the file is unprotected, nil if it's password protected.
+See also https://security.stackexchange.com/a/245767/318401."
   (= 0 (call-process "ssh-keygen" nil nil nil
                      "-y" "-P" "" "-f" identity-path)))
 
@@ -111,7 +112,8 @@ Returns t if the file is unprotected, nil if it's password protected."
 
 (defun agenix--create-temp-identity (identity-path password)
   "Create a temporary copy of IDENTITY-PATH and remove its password protection.
-PASSWORD is the current password of the identity file."
+PASSWORD is the current password of the identity file.
+See also https://stackoverflow.com/a/112409/5616591.''"
   (let* ((temp-file (make-temp-file "agenix-temp-identity"))
          (copy-cmd (format "cp %s %s" identity-path temp-file))
          (rekey-cmd (format "ssh-keygen -p -P \"%s\" -N \"\" -f %s" password temp-file)))
